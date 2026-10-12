@@ -1,0 +1,39 @@
+#!/bin/sh
+# SIMULATED sshd output for logic tests only. Never used as audit evidence.
+if [ "${UNIT_CASE:-}" = query-failure ]; then
+    printf '%s\n' 'SIMULATED: configuration query failed' >&2
+    exit 2
+fi
+UNIT_LOOPBACK=no
+for UNIT_ARG in "$@"; do
+    case "$UNIT_ARG" in *,addr=127.0.0.1,*) UNIT_LOOPBACK=yes ;; esac
+done
+UNIT_CHAIN='publickey,keyboard-interactive:pam'
+UNIT_KEY=yes
+UNIT_INTERACTIVE=yes
+UNIT_PAM=yes
+UNIT_KEX='curve25519-sha256,diffie-hellman-group14-sha256'
+UNIT_CIPHER='aes128-ctr,chacha20-poly1305@openssh.com'
+UNIT_HOSTKEY='ssh-ed25519,rsa-sha2-256,rsa-sha2-512'
+UNIT_ACCEPTED='ssh-ed25519,rsa-sha2-256,rsa-sha2-512'
+case "${UNIT_CASE:-}" in
+    defaults) UNIT_CHAIN=any; UNIT_INTERACTIVE=no ;;
+    alternative-bypass) UNIT_CHAIN='publickey,keyboard-interactive:pam publickey' ;;
+    match-bypass) [ "$UNIT_LOOPBACK" = no ] || UNIT_CHAIN=any ;;
+    repeated-publickey) UNIT_CHAIN='publickey,publickey' ;;
+    method-off) UNIT_PAM=no ;;
+    legacy)
+        UNIT_KEX="$UNIT_KEX,diffie-hellman-group1-sha1"
+        UNIT_CIPHER="$UNIT_CIPHER,aes128-cbc,arcfour256"
+        UNIT_HOSTKEY="$UNIT_HOSTKEY,ssh-rsa,ssh-dss-cert-v01@openssh.com"
+        UNIT_ACCEPTED="$UNIT_ACCEPTED,ssh-rsa-cert-v01@openssh.com"
+        ;;
+    multi-alternative) UNIT_CHAIN='publickey,keyboard-interactive:pam publickey,publickey,keyboard-interactive:pam' ;;
+esac
+if [ "${UNIT_CASE:-}" != empty-output ]; then
+    printf 'authenticationmethods %s\npubkeyauthentication %s\nkbdinteractiveauthentication %s\n' "$UNIT_CHAIN" "$UNIT_KEY" "$UNIT_INTERACTIVE"
+    [ "${UNIT_CASE:-}" = missing-method ] || printf 'usepam %s\n' "$UNIT_PAM"
+    if [ "${UNIT_CASE:-}" != missing-crypto ]; then
+        printf 'kexalgorithms %s\nciphers %s\nhostkeyalgorithms %s\npubkeyacceptedalgorithms %s\n' "$UNIT_KEX" "$UNIT_CIPHER" "$UNIT_HOSTKEY" "$UNIT_ACCEPTED"
+    fi
+fi
